@@ -1,0 +1,550 @@
+---
+title: "CEO Salary and Performance EDA"
+author: "Chris Fleisch"
+date: "September 19, 2016"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+This analysis is motivated by the think tank question:
+
+> Is company performance related to CEO salary?
+
+We will be looking at data provided by the think tank that they have collected from a selection of companies.
+
+Company performance could be measured in a couple different ways. Profit is one way of measuring performance, but a company that doesn't have any profits and increases its market value could also be seen as performing well. Since we only have a single year of market value we won't be able to determine if market value has increased or decreased over time.
+
+We also don't have any previous years of profits. We won't be able to see if a company with negative profits in 1990 had significantly worse previous year's profits and is actually performing well this year even though it still has a negative profit.
+
+We'll have to focus on the positive profits and market value as a leading indicator that the company is performing well in this particular year for this data.
+
+While we're mainly interested in how the CEO's salary is related to company performance we also have the age, college attendance, and number of years at the company and as CEO that could confound our analysis.
+
+This will be an exploratory data analysis focusing on descriptive tools to evaluate relationships between variables. We won't be looking at any causality. For example, we won't be able to say that larger CEO salaries cause companies to perform better.
+
+## Setup
+
+We will use the scatterplotMatrix function from the car library to look at all the variables and load ggplot2 library for plotting. The dplyr library will be used for filtering and grouping.
+
+```{r}
+library(car)
+library(ggplot2)
+library(dplyr)
+```
+
+This loads the data from the provided Rdata file.
+
+```{r}
+load("ceo_w203.RData")
+```
+
+## Data Structure
+
+We'll look at the structure of the dataset including the number of observations variables and make sure they match what we are expecting.
+
+```{r}
+str(CEO)
+```
+
+We see 184 rows of observations and 8 variables. This is not a very large sample of data.
+
+All the variables are numbers. We want to convert the college and grad variables to factors since they should only contain a 0 or 1 and are indicating college or grad school attendance.
+
+We convert the college and grad variables to factors by adding them as new variables. This will make the boxplots easier to label later and will help with our summary statistics that we'll look at next.
+
+```{r}
+CEO$college.factor <- factor(CEO$college, levels=c(0, 1), 
+                             labels=c("No college", 
+                                      "Attended college"))
+CEO$grad.factor <- factor(CEO$grad, levels=c(0, 1), 
+                          labels=c("No grad school", 
+                                   "Attended grad school"))
+str(CEO)
+```
+
+Looking at the structure again we see that we've added college.factor and grad.factor to our data set and set them with appropriate labels.
+
+Next we'll get a summary of all the variables.
+
+```{r}
+summary(CEO)
+```
+
+We notice that salary, profits and market value have very large ranges. And salary, profits, and market value all have much larger means than medians. There's likely some large outliers in the data which we'll look at later.
+
+It looks like most of the CEO's attended college while only 7 did not. It's likely that this won't confound with other variables, but we'll take a closer look. The number of CEO's that attended grad school is more evenly split and could confound our analysis. We'll explore that further.
+
+We notice that there's at least one company with a negative profit and one company with a negative market value. We'll need to investigate these further. A company shouldn't have a negative market value.
+
+There's a wide range of ages in this data, but the mean age is around 56. The mean and median years at the company are very close at about 22. And the mean years as CEO is about 8. We'll create some scatter plots to see if age and years at the company relates to profits and market value.
+
+Before we create a scatter plot matrix we should explore some of the interesting variables revealed by the summary. First we'll see how many observations have a negative profit and how many have a negative market value.
+
+```{r}
+(nrow(CEO[CEO$profits < 0,]))
+(CEO[CEO$profits < 0,])
+(nrow(CEO[CEO$profits == -1,]))
+(CEO[CEO$profits == -1,])
+```
+
+There's 15 observations with negative profits. We'll assume those companies lost money in 1990. Taking a look at the observations with negative values we also see that there's many rows with a -1 for profits. That seems unusual that there would be 5 with the same -1 value in the profit variable. We then filter for the rows with -1 in profit and we notice that the rows with -1 for profits also have a -1 for market value.
+
+Let's filter for rows with a negative market value.
+
+```{r}
+(nrow(CEO[CEO$mktval < 0,]))
+(CEO[CEO$mktval < 0,])
+```
+
+There's five observations that have a market value of -1. They also have a profit of -1. It's likely that these values are unknown and we should code them as NA. This might be a good time to contact the think tank and get clarification on these values. There shouldn't be any companies with a negative market value.
+
+For now, we'll code the -1 values we found in profits and market value as NA and continue the analysis.
+
+```{r}
+CEO$profits[CEO$profits == -1] <- NA
+CEO$mktval[CEO$mktval == -1] <- NA
+summary(CEO)
+```
+
+We now have 5 NA's for the values that had a -1 in profits and market value. Our summary shows that our minimum market value is now 200 which sounds more reasonable.
+
+## Exploratory Analysis
+
+We have 8 variables and we want to see them all at once to get a quick overview of their relationships. We'll use this as a starting point to dig deeper into the important features of our dataset keeping in mind our question focuses on salary and company performance.
+
+Here's our scatterplot matrix.
+
+```{r warning=FALSE}
+scatterplotMatrix(~ salary + age + comten + ceoten + profits + 
+                    mktval + college.factor + grad.factor, 
+                  data = CEO, 
+                  main = "Scatterplot Matrix for CEO variables")
+```
+
+We notice several relationships for the CEO features that we will use to guide the analysis further:
+
+1. The first thing we notice is that there is a positive relationship between profits and salary. These are the features that we first set out to explore. And there's a similar relationship between market value and salary.
+2. There's a strong relationship between age and company years. This is to be expected. The older someone is the more time they have to be working at a company. We see a similar relationship with age and CEO years, but not as strong. Since these relationships are not about market value or profits we won't explore them further. The relationship between age and profits seems to be very minimal and slightly positive. Age and market value have the same slightly positive relationship. We could take a closer look at these later.
+3. We see a positive relationship between company years and CEO years, but that's not really what we're interested in. The relationship between company years and profits and market value is only slightly positive.
+4. CEO years doesn't appear to have a relationship with profits or market value. The regression lines for these graphs are flat.
+5. There's a very positive, almost linear relationship between market value and profits. This is expected since profits usually increase market value.
+6. Since most CEOs attended college this variable doesn't seem to have a strong relationship with the other variables.
+7. The graduate attendance appears to have a negative relationship with age, company years, CEO years, and a small positive relationship with profits and market value. This variable could confound our analysis and we will want to explore it further.
+
+There's a lot of graphs generated by the scatter plot matrix. It can be hard to tell what's going on unless the graph is larger. We'll generate a correlation matrix to get some numbers to show the strengths of the relationships between our variables.
+
+```{r}
+cor(CEO[,1:8], use = "complete.obs")
+```
+We see some correlation between salary and profits (.39) and salary and market value (.41) which we already suspected as having a strong relationship. And the correlation with profit and market value is very strong (.91) which was displayed in our scatter plot.
+
+Age also shows some correlation with company years (.49) and CEO years (.33) even though we're not really interested in that relationship right now. Age has a small correlation with profits (.12) and market value (.12) as we suspected from the scatter plot matrix.
+
+College doesn't have a strong correlation with profits or market value. Graduate attendance shows a small correlation with profits (.09) and market value (.11).
+
+CEO years doesn't show much correlation between profits and market value. Company years shows a small correlation with profits (.15) and market value (.14).
+
+From the plots we'll want to take a closer look at salary, profits, and market value. We also should see how college and grad school attendance might affect profits and market value. And we can take a look at age and company years.
+
+We'll start by taking a look at our outcome variable profits by summarizing it.
+
+```{r}
+summary(CEO$profits)
+```
+
+There's a wide range of profits. There's some negative values and some positive values. The mean is also significantly more than the median which suggests that this data is skewed right.
+
+We'll make a histogram of the profits to get a better understanding of the distribution.
+
+```{r}
+qplot(profits, data = na.omit(CEO), binwidth = 50) +
+  labs(title = "Company profits in 1990", y = "Count") +
+  scale_x_continuous(name = "Profits in millions", 
+                     limits = c(-500, 3000),
+                     breaks = seq(-500, 3000, 500))
+```
+
+There's a few features to note on the profits histogram:
+
+1. There are some negative values. We suspect that there are a few companies that lost money during the 1990 year.
+2. There's a large number of companies with profits in the 0-500 million range. And a large spike around the 0-250 range. We'll need to look at that closer.
+3. The data skews right. There's some rather large outliers to the right that are pulling our mean to the right of the median like we saw in the summary.
+
+We should look at another histogram to try and see what's happening at that spike.
+
+```{r}
+hist(CEO$profits, breaks = 10000, main = "Profits in 1990", 
+     xlab = "Millions of dollars", cex.axis = .7)
+axis(1, at = seq(-500, 3000, 500), cex.axis = .7)
+```
+
+In this histogram we set a large number of breaks so that each value has its own bin and we see several values having the same profit. It's unlikely that each company makes the exact same profit. We should see how many companies are making the same profit.
+
+We'll group the data by profits and get some counts.
+
+```{r}
+profits.df = group_by(CEO, profits) %>%
+  summarize(counts = n()) %>%
+  arrange(desc(counts)) %>%
+  as.data.frame()
+
+head(profits.df, 20)
+```
+
+Grouping by profits we can see that several companies have the exact same values for profits. This seems unusual for a small dataset. We weren't expecting so many overlapping values for a data set with only 184 observations. Since these values are in millions of dollars perhaps the numbers were loose estimations or there was some rounding when the data was entered. We could go back to the think tank to see if we can find out how these numbers where entered.
+
+We should also take a look at some of the other variables of the companies with the same profits to see if any of the other variables are the same.
+
+```{r}
+CEO %>% filter(profits == 40)
+```
+
+For the 6 companies that made 40 million in profits, most of other variables are different. We see two CEOs made 650. We should probably check the salary variable too.
+
+We'll also take a look at the next highest profit group. These companies made 28 million in profit.
+
+```{r}
+CEO %>% filter(profits == 28)
+```
+
+For companies that made 28 million in profits their other variables are different from each other. It doesn't look like it's a case of the same observations entered multiple times.
+
+We will take a look at the summary of market value.
+
+```{r}
+summary(CEO$mktval)
+```
+
+The mean is significantly greater than the median. The data is skewed right. There is a large range of values from 200 - 45400. All the values are positive after we coded the negative values as NA.
+
+Let's look at a histogram of the market value.
+
+```{r}
+qplot(mktval, data = na.omit(CEO), binwidth = 500) +
+  labs(title = "Market value in 1990", y = "Count") +
+  scale_x_continuous(name = "Market value in millions", 
+                     limits = c(0, 50000),
+                     breaks = seq(0, 50000, 5000))
+```
+
+A few features stand out:
+
+1. The data is heavily skewed right with a significant amount of market values less than a billion.
+2. We notice that all values are positive after we removed the -1 values.
+3. There is another large spike in this histogram. We should make another histogram to explore this further.
+
+```{r}
+hist(CEO$mktval, breaks = 10000, main = "Market value in 1990", 
+     xlab = "Millions of dollars", cex.axis = .7)
+axis(1, at = seq(0, 45000, 5000), cex.axis = .7)
+```
+
+With a large number of breaks we see that there are some companies that have the same market value.
+
+We'll explore more and group the market values together to try and see how many have the same market value.
+
+```{r}
+market_val.df = group_by(CEO, mktval) %>%
+  summarize(count = n()) %>%
+  arrange(desc(count)) %>%
+  as.data.frame()
+
+head(market_val.df, 20)
+```
+
+Here we see a significant amount of companies with the same market value. We could check with the think tank again about these values. It could be another issue of rounding or estimation when the values were entered into the sample. We see 8 companies with the same market value of 1200. With 4 digits there is room for more precision. It could be that the exact value is not interesting for this question and we  might only need rough estimates. For other types of questions this might be problematic.
+
+Let's explore some of the rows that have the same market value.
+
+```{r}
+filter(CEO, mktval == 1200)
+filter(CEO, mktval == 1400)
+```
+
+When looking at some of companies that have the same market values we don't see many other values that are the same across all the other variables. We'll assume that these values are not duplicates. It does seem odd that these values are the same when the market value obtained from a source like the stock market would have more exact figures.
+
+We'll next look at salary information for the CEOs. Here's a summary of salary.
+
+```{r}
+summary(CEO$salary)
+```
+
+The salary summary shows us that the mean is larger than the median suggesting that this data skews right. We also notice that 50% of the values are in 470 - 1102 range and that there's one max value over 5 million. The CEOs in this sample all seem to be getting by OK and since they are running companies we expect them to make large salaries.
+
+We'll make a histogram of the salary.
+
+```{r}
+qplot(salary, data = CEO, binwidth = 100) +
+  labs(title = "CEO salary in 1990", y = "Count") +
+  scale_x_continuous(name = "Salary in  thousands", 
+                     limits = c(0, 5500),
+                     breaks = seq(50, 5500, 500))
+```
+
+Features to note in the salary histogram:
+
+1. This histogram shows all values are positive (as expected for a salary).
+2. The graph skews towards the right. It could be interesting to see if this reimbursement is appropriate for the company's performance based on other CEO salaries and performance. We won't explore that here.
+3. Most of the values are less than 2 million.
+4. We see a couple spikes in the data. There's a couple large ones in the 400-800 range. And then a few lower spikes as the graph moves towards the right. There could be a common CEO level of compensation based on company size that might account for the spikes.
+5. From this histogram we can see that the salary ramps up pretty quickly at about 400 and then is right skew. This might suggest that most CEOs are starting at about 400,000 for this position and CEO's making less may want to use this to negotiate better compensation. CEO's making over 1.5 million should be considered pretty well compensated for this particular sample.
+
+We will group the salaries together to see how many are making the same amount. 
+
+```{r}
+salaries.df = group_by(CEO, salary) %>%
+  summarize(count = n()) %>%
+  arrange(desc(count)) %>%
+  as.data.frame()
+
+head(salaries.df, 20)
+```
+
+There are number of salaries that are the exact same, but the highest count is 3 for 650. We'll take a closer look at the top 3.
+
+```{r}
+filter(CEO, salary == 650)
+filter(CEO, salary == 358)
+filter(CEO, salary == 379)
+```
+
+There are 3 salaries with 650,000. They are all different ages. Two of them have the same profits and two of them have the same market value. It's only 3 observations, but this might be something to look into more about where the data came from or if it has been manipulated in some way.
+
+The other salaries (358, 379) don't seem to have any other similarities with each other.
+
+We want to better understand the relationship between salary and profits. We'll plot our points and a least squares regression line to see if there's a relationship.
+
+```{r}
+ggplot(na.omit(CEO), aes(x=salary, y=profits)) + geom_point() +
+  geom_smooth(method = 'lm', se = FALSE) +
+  labs(title = "Profits for different salary levels", 
+       x = "Salary in thousands", y = "Profits in millions") +
+  scale_x_continuous(breaks = seq(0, 5000, 1000)) +
+  scale_y_continuous(breaks = seq(-500, 3500, 500))
+```
+
+Our regression line shows that there is an overall positive relationship between salary and profits. A higher salary is associated with higher profits. This is not to say that the relationship is linear. It only shows us the best fitting line. There are also several outliers. The highest salary for a CEO is over 5 million, but this company doesn't have anywhere near the highest profits.
+
+The linear regression line doesn't fit very well. That's a lot of noise above it suggesting a different model might be a fit better for this sample.
+
+We can verify the positive relationship by looking at the salary and profit sample correlation.
+
+```{r}
+cor(CEO$salary, CEO$profits, use = "complete.obs")
+```
+
+The salary and profits show a positive (.39) correlation, but only moderate in magnitude.
+
+We could also look at the salary and profits boxplots. We will group the salaries into several different buckets.
+
+```{r}
+salary_bins = cut(CEO$salary, 
+                  breaks = c(0, 250, 500, 750, 1000, 1250, 1500, Inf),
+                  labels = c("0-250K", ">250K-500K", ">500K-750K",
+                             ">750K-1M", ">1M-1.25M", ">1.25M-1.5M",
+                             ">1.5M+"))
+ggplot(CEO, aes(x = salary_bins, y = profits)) +
+  geom_boxplot() +
+  labs(title = "Profits by salary range", x = "Salary range",
+       y = "Profits in millions") +
+  scale_y_continuous(breaks = seq(-500, 3500, 500)) +
+  theme(axis.text=element_text(size=8))
+```
+From the boxplots we can see that the median profits are generally moving up the more the salary increases. It looks like there is a slight decrease at the 500-750 salary range from the 250-500 salary range, but overall the trend is positive. There's also not a lot of data at the extreme ends of the salary.
+
+We will make plot of salary and market value to see if there's a relationship.
+
+```{r}
+ggplot(na.omit(CEO), aes(x=salary, y=mktval)) + geom_point() +
+  geom_smooth(method = 'lm', se = FALSE) +
+  labs(title = "Market values for different salary levels", 
+       x = "Salary in thousands", y = "Market value in millions") +
+  scale_x_continuous(breaks = seq(0, 5000, 1000)) +
+  scale_y_continuous(breaks = seq(0, 50000, 10000))
+```
+
+This scatter plot and line shows that the salary has a positive relationship with market value. This is not a linear relationship, but the line indicates a positive correlation. A higher salary is associated with a higher market value. This graph looks very similar to the salary and profits graph. It shows the same highly paid CEO outlier as well.
+
+The linear regression line doesn't look like a good fit here either. There's a lot of noise and high values that don't seem to be captured by the simple model.
+
+Let's look at the correlation between salary and market value.
+
+```{r}
+cor(CEO$salary, CEO$mktval, use = 'complete.obs')
+```
+
+There seems to be a moderate correlation (.4) between salary and market value.
+
+We will also take a look at salary ranges and market values with some boxplots. We'll use the same salary bins as we used before.
+
+```{r}
+ggplot(CEO, aes(x=salary_bins, y=mktval)) +
+  geom_boxplot() +
+  labs(title = "Market value by salary range", x = "Salary range",
+       y = "Market value in millions") +
+  scale_y_continuous(breaks = seq(0, 50000, 10000)) +
+  theme(axis.text=element_text(size=8))
+```
+
+From the boxplots of salary and market value we see a similar trend as the salary and profits boxplots. The median market value is increasing as the salary increases.
+
+We should also explore the relationship between profits and market value.
+
+```{r}
+ggplot(na.omit(CEO), aes(x=profits, y=mktval)) + geom_point() +
+  geom_smooth(method = 'lm', se = FALSE) +
+  labs(title = "Market value by profits", x = "Profits in millions",
+       y = "Market value in millions") +
+  scale_x_continuous(breaks = seq(-500, 3500, 500)) +
+  scale_y_continuous(breaks = seq(0, 50000, 10000))
+```
+
+The graph of market value and by profits shows a strong relationship between profits and market value. This is expected since profit is used to measure the value of the company. We can also see that companies with negative profit still had some market value to them which the regression line doesn't capture. If we were only concerned about market value, then profits might be a better indicator than salary. Since were interested in salary and company performance there could be some confounding with salary, profits and market value.
+
+We can look at the correlation too to see how strong the relationship is between profits and market value.
+
+```{r}
+cor(CEO$profits, CEO$mktval, use = "complete.obs")
+```
+
+The correlation (.91) shows strong correlation between profits and market value. This is much higher than the correlation between the salary and the profits we looked at earlier and the correlation between salary and market value.
+
+While salary is our main focus for this exploration we also want to look at age, time at company, college, grad school and how those relate to profit and market value to see if we find any other valuable relationships.
+
+We'll first look at age and profits in a scatter plot.
+
+```{r}
+ggplot(na.omit(CEO), aes(x = age, y = profits)) + geom_point() + 
+  geom_smooth(method = 'lm', se = FALSE) +
+  labs(title = "Profits by age", x = "Age of CEO", 
+       y = "Profits in millions") +
+  scale_y_continuous(breaks = seq(-500, 3500, 500))
+```
+
+From this graph we can see a very slight positive relationship from the best fit line. This indicates an association between older CEOs and higher profits. However, the linear regression line is not a very good fit. There's a lot of noise above the line and perhaps an inverted parabola would be a better fit for this sample.
+
+Let's look at the correlation between age and profit.
+
+```{r}
+cor(CEO$age, CEO$profits, use = "complete.obs")
+```
+
+This correlation between age and profit is pretty low (.12).
+
+Let's make some boxplots of age and profits.
+
+```{r}
+age_bins = cut(CEO$age, 
+                  breaks = c(20, 40, 50, 60, 70, Inf),
+                  labels = c("20-40", ">40-50", ">50-60",
+                             ">60-70", ">70"))
+ggplot(CEO, aes(x = age_bins, y = profits)) + geom_boxplot() + 
+  labs(title = "Profits by age", x = "Age of CEO", 
+       y = "Profits in millions") +
+  scale_y_continuous(breaks = seq(-500, 3500, 500))
+```
+
+These boxplots show the same small positive relationship between the age groups and median profits. The age group for >70 starts to go back down. This is likely due to few people at that age still working. The association between age and profits could mean that older people perform better at the CEO position, but the relationship is very weak and is not a good indicator.
+
+Overall, the scatter plot and boxplots of age don't appear to have a strong relationship with profits. We will not explore age and market value since the scatterplot indicated that there was not a strong relationship earlier.
+
+We will now take a look at years at the company and market value.
+
+```{r}
+ggplot(na.omit(CEO), aes(x = comten, y = mktval)) + geom_point() + 
+  geom_smooth(method = 'lm', se = FALSE) +
+  labs(title = "Market value by CEO years at company", 
+       x = "CEO years at company", 
+       y = "Market value in millions") + 
+  scale_y_continuous(breaks = seq(0, 50000, 10000))
+```
+
+We see that the amount of time at a particular company has a very small positive relationship with the market value. This could also be that companies grow over time and not, because the person was at the company for many years. The linear regression line here doesn't fit very well either. It has a lot of noise above it.
+
+Let's calculate the correlation between years at company and market value.
+
+```{r}
+cor(CEO$comten, CEO$mktval, use = "complete.obs")
+```
+
+We see a small correlation (.14) between years at company and market value. This is likely not a very good indicator of company performance.
+
+We'll create some boxplots for years at company and market value.
+
+```{r}
+years_at_bins = cut(CEO$comten, 
+                  breaks = c(0, 10, 20, 30, 40, Inf),
+                  labels = c("0-10", ">10-20", ">20-30",
+                             ">30-40", ">40"))
+ggplot(CEO, aes(x = years_at_bins, y = mktval)) + 
+  geom_boxplot() +
+  labs(title = "Years at company and market value", 
+       x = "Years CEO at company", 
+       y = "Market value in millions") +
+  scale_y_continuous(breaks = seq(0, 50000, 10000))
+```
+
+When the ages are broken into groups we see a different trend. The median for years at company goes up slightly towards the middle and then down and then slightly up again. These are all small differences though and are not indicators of any strong relationships.
+
+We should also look at graduate school attendance to see if higher education has any association with company performance.
+
+```{r}
+ggplot(na.omit(CEO), aes(x = grad.factor, y = profits)) + 
+  geom_boxplot() +
+  labs(title = "Profits by graduate school attendance",
+       x = "Graduate school attendance",
+       y = "Profits in millions")
+```
+
+The median profits are slightly higher for attending grad school. This doesn't show a big difference between profits and grad school attendance. It's likely this variable is not a good predictor of profits.
+
+We'll also look at market value and graduate attendance.
+```{r}
+ggplot(na.omit(CEO), aes(x = grad.factor, y = mktval)) + geom_boxplot() +
+  labs(title = "Market value by graduate school attendance",
+       x = "Graduate school attendance",
+       y = "Market value in millions")
+```
+
+This shows a similar relationship as graduate school attendance and profits. Here the median market value for CEOs that attended graduate school is only slightly higher that for those without graduate school. This seems to indicate that graduate school is not a good indicator of company performance.
+
+We should also check college attendance.
+
+```{r}
+ggplot(na.omit(CEO), aes(x = college.factor, y = profits)) +
+  geom_boxplot() +
+  labs(title = "Market value by college attendance",
+       x = "College attendance",
+       y = "Profits in millions") +
+  scale_y_continuous(breaks = seq(-500, 3500, 500))
+(nrow(CEO[CEO$college == 0,]))
+```
+
+Here we see that not attending college has a slightly higher median value. However there were only a few observations in the dataset that had no college (7). It would be hard to draw conclusions from such a small number.
+
+Let's see if the same is true for market value and college.
+
+```{r}
+ggplot(na.omit(CEO), aes(x = college.factor, y = mktval)) + geom_boxplot() +
+  labs(title = "Market value by college attendance",
+       x = "College attendance",
+       y = "Market value in millions") +
+  scale_y_continuous(breaks = seq(0, 50000, 10000))
+```
+
+This shows a different relationship. Those that attended college have a median market value slightly higher than those that did not attend college. While interesting there's only 7 observations for those not attending college and it doesn't show a strong relationship between attending college and market value.
+
+## Discussion
+
+We looked how salary is associated with profits and market value. We've shown that there is a moderate association between salary and profits and salary and market value. Salary would be a good feature to use for statistical modeling. We also saw that profit has a very strong association with market value and while it was expected it may be useful to add it to our statistical models. There were a lot of outliers and positive skew in our data. The linear regression lines didn't always capture our data very well and perhaps other models should be considered.
+
+While our focus was on salary we saw that age, years at company, college, and grad school had small associations with company performance and could affect our statistical analysis.
+
+Early in the discovery process we uncovered several observations that couldn't be used due to the same negative values in market value and profits. We then omitted those 5 observations from our exploration analysis. The small number likely didn't affect the relationships that we discovered. It might be worth checking with the source of the data about these values. We also saw several duplicate values in salary, market value, and profits. While we didn't throw them out it was worth noting that these values might have an effect on future analysis.
+
+
